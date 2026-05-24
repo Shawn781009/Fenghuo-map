@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>烽火卷 · 全球历史战争地图</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+@import url('https://fonts.googleapis.cn/css2?family=Noto+Serif+SC:wght@400;700&family=ZCOOL+XiaoWei&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Microsoft YaHei','PingFang SC','Noto Sans SC','WenQuanYi Micro Hei',sans-serif;background:#0a0a0a;overflow:hidden;height:100dvh;width:100vw;color:#d4b67c}
+#map{position:absolute;top:0;left:0;right:0;bottom:0;z-index:1}
+
+/* leaflet override */
+.leaflet-control-zoom{display:none}
+.leaflet-control-attribution{background:rgba(10,10,10,.7)!important;font-size:9px!important;color:#5a4433!important}
+.leaflet-control-attribution a{color:#8c7755!important}
+
+/* Custom zoom */
+.zoom-ctrl{position:fixed;bottom:20px;left:20px;z-index:1000;display:flex;flex-direction:column;gap:2px}
+.zoom-ctrl button{width:32px;height:32px;background:rgba(10,10,10,.85);border:1px solid #5a4433;border-radius:8px;color:#c4a97d;font-size:18px;line-height:1;cursor:pointer;transition:all .2s}
+.zoom-ctrl button:hover{background:#2a1a08;border-color:#d4b67c;color:#e8d5a8}
+
+/* Header */
+.header{position:fixed;top:0;left:0;right:0;z-index:1000;pointer-events:none;padding:16px 24px 28px;
+  background:linear-gradient(180deg,rgba(10,10,10,.92),rgba(10,10,10,.6) 70%,transparent)}
+.header h1{font-family:'ZCOOL XiaoWei',serif;font-size:1.6rem;color:#d4b67c;letter-spacing:.18em;text-shadow:0 2px 12px rgba(0,0,0,.8)}
+.header .subtitle{font-size:.7rem;color:#8c7755;letter-spacing:.08em;margin-top:2px}
+
+/* Legend */
+.legend{position:fixed;bottom:20px;left:70px;z-index:1000;background:rgba(10,10,10,.85);border:1px solid #5a4433;
+  border-radius:12px;padding:8px 14px}
+.legend .dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:4px;vertical-align:middle}
+.legend span{color:#c4a97d;font-size:.6rem;display:inline-block;margin-right:12px}
+
+/* Detail Panel */
+.panel{position:fixed;top:50%;right:18px;transform:translateY(-50%);z-index:1001;width:340px;max-height:76dvh;
+  background:rgba(10,10,10,.93);border:1px solid #5a4433;border-radius:16px;padding:24px 20px;
+  box-shadow:0 20px 60px rgba(0,0,0,.5);opacity:0;visibility:hidden;transition:opacity .3s,visibility .3s;overflow-y:auto}
+.panel.active{opacity:1;visibility:visible}
+.panel .era-tag{display:inline-block;background:#2a1a0a;color:#d4b67c;font-size:.6rem;padding:3px 10px;border-radius:20px;margin-bottom:8px}
+.panel h2{font-family:'ZCOOL XiaoWei',serif;font-size:1.3rem;color:#e8d5a8;margin-bottom:3px}
+.panel .loc{font-size:.66rem;color:#8c7755;margin-bottom:12px}
+.panel .story{font-size:.78rem;line-height:1.8;color:#c4a97d;text-align:justify}
+.panel .meta{display:flex;gap:16px;margin-top:12px;font-size:.6rem;color:#8c7755;border-top:1px solid #3a2a18;padding-top:10px}
+.panel .meta div span{display:block;color:#d4b67c;font-size:.72rem;font-weight:bold}
+
+/* Close button */
+.panel-close{position:absolute;top:8px;right:12px;background:none;border:none;color:#5a4433;font-size:18px;cursor:pointer}
+.panel-close:hover{color:#d4b67c}
+
+/* Counter */
+.counter{position:fixed;bottom:20px;right:20px;z-index:1000;background:rgba(10,10,10,.8);border:1px solid #5a4433;
+  border-radius:20px;padding:5px 14px;color:#8c7755;font-size:.62rem}
+
+/* Filter bar */
+.filter-bar{position:fixed;top:80px;right:20px;z-index:1000;display:flex;gap:8px}
+.filter-bar select{background:rgba(10,10,10,.85);border:1px solid #5a4433;color:#8c7755;padding:5px 10px;border-radius:8px;font-family:'Microsoft YaHei','PingFang SC','Noto Sans SC',sans-serif;font-size:.62rem;cursor:pointer;outline:none}
+.filter-bar select:hover{border-color:#c4940a}
+.filter-bar select:focus{border-color:#d4b67c}
+
+/* Tour button */
+.tour-btn{position:fixed;bottom:20px;right:90px;z-index:1000;background:rgba(10,10,10,.85);border:1px solid #5a4433;
+  border-radius:20px;padding:6px 16px;color:#c4a97d;font-family:'Microsoft YaHei','PingFang SC','Noto Sans SC',sans-serif;font-size:.6rem;cursor:pointer;
+  letter-spacing:.04em;transition:all .2s}
+.tour-btn:hover{background:#2a1a08;border-color:#d4b67c;color:#e8d5a8}
+.tour-btn.on{background:#2a1a08;border-color:#c4940a;color:#e0d0a0;animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 6px rgba(196,148,10,.2)}50%{box-shadow:0 0 16px rgba(196,148,10,.5)}}
+
+/* Event List */
+.event-list{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:1000;
+  background:rgba(10,10,10,.93);border:1px solid #5a4433;border-radius:12px;
+  max-height:200px;width:500px;overflow-y:auto;display:none;flex-direction:column}
+.event-list.show{display:flex}
+.event-list .list-header{display:flex;justify-content:space-between;align-items:center;padding:8px 14px;
+  border-bottom:1px solid #3a2a18;font-size:.62rem;color:#8c7755;position:sticky;top:0;background:rgba(10,10,10,.95)}
+.event-list .list-header span{color:#d4b67c}
+.event-list .list-close{background:none;border:none;color:#5a4433;font-size:14px;cursor:pointer}
+.event-list .list-close:hover{color:#d4b67c}
+.event-list .list-item{display:flex;align-items:center;gap:8px;padding:6px 14px;cursor:pointer;transition:background .15s;
+  border-bottom:1px solid rgba(58,42,24,.3);font-size:.62rem;color:#c4a97d}
+.event-list .list-item:hover{background:rgba(42,26,8,.5);color:#e8d5a8}
+.event-list .list-item .item-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.event-list .list-item .item-year{color:#8c7755;margin-left:auto;flex-shrink:0}
+
+/* List toggle button */
+.list-toggle{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(-52px);z-index:1001;
+  background:rgba(10,10,10,.85);border:1px solid #5a4433;border-radius:20px;padding:5px 14px;
+  color:#8c7755;font-family:'Microsoft YaHei','PingFang SC','Noto Sans SC',sans-serif;font-size:.6rem;cursor:pointer;letter-spacing:.04em;transition:all .2s}
+.list-toggle:hover{background:#2a1a08;border-color:#d4b67c;color:#d4b67c}
+.list-toggle.has-results{color:#c4a97d}
+
+@media(max-width:768px){
+  .filter-bar{top:60px;right:6px;gap:4px}
+  .filter-bar select{padding:4px 6px;font-size:.55rem}
+  .panel{right:4px;left:4px;width:auto;top:auto;bottom:6px;transform:none;max-height:45dvh;border-radius:16px 16px 0 0}
+  .legend{left:68px;font-size:.55rem;padding:6px 10px}
+  .legend span{margin-right:8px}
+  .event-list{width:94vw;max-height:150px}
+}
+
+/* Leaflet marker style override */
+.marker-div-icon{background:transparent!important;border:none!important}
+.marker-dot{width:0;height:0}
+
+/* Custom fixed-size labels */
+.custom-label{position:absolute;z-index:500;pointer-events:auto;cursor:pointer;
+  font-family:'Microsoft YaHei','PingFang SC','Noto Sans SC',sans-serif;font-weight:bold;
+  text-align:center;line-height:1.3;text-shadow:0 1px 4px rgba(0,0,0,.8);
+  user-select:none;white-space:nowrap;padding:2px 6px;border-radius:4px;
+  background:rgba(0,0,0,.45);transition:opacity .3s,transform .15s;
+  transform:translate(-50%, -50%)}
+.custom-label:hover{transform:translate(-50%, -50%) scale(1.25);z-index:501}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>烽 火 卷</h1>
+  <p class="subtitle">纵横五千年 · 144 场改变人类命运的战役 · 山河为卷 烽火为墨 · <span style="color:#8c7755;font-style:italic">制作人：项清风</span></p>
+</div>
+
+<div class="zoom-ctrl">
+  <button onclick="map.zoomIn()" title="放大">+</button>
+  <button onclick="map.zoomOut()" title="缩小">−</button>
+</div>
+
+<div class="legend">
+  <span><i class="dot" style="background:#e0553d;box-shadow:0 0 6px #e0553d"></i>战役</span>
+  <span><i class="dot" style="background:#4ea8de;box-shadow:0 0 6px #4ea8de"></i>海战</span>
+  <span><i class="dot" style="background:#d49a0a;box-shadow:0 0 6px #d49a0a"></i>转折</span>
+  <span><i class="dot" style="background:#c77dff;box-shadow:0 0 6px #c77dff"></i>起义</span>
+</div>
+
+<div class="filter-bar">
+  <select id="eraFilter" onchange="applyFilter()">
+    <option value="all">全部年代</option>
+  </select>
+  <select id="typeFilter" onchange="applyFilter()">
+    <option value="all">全部类型</option>
+    <option value="war">战役</option>
+    <option value="naval">海战</option>
+    <option value="turning">转折</option>
+    <option value="capital">古都</option>
+    <option value="rebellion">起义</option>
+  </select>
+  <select id="regionFilter" onchange="applyFilter()">
+    <option value="all">全部地区</option>
+    <option value="china">中国</option>
+    <option value="europe">欧洲</option>
+    <option value="asia">亚洲其他</option>
+    <option value="americas">美洲</option>
+    <option value="africa">非洲</option>
+    <option value="oceania">大洋洲</option>
+  </select>
+</div>
+
+<button class="tour-btn" id="tourBtn" onclick="toggleTour()">▶ 时空巡游</button>
+<button class="list-toggle" id="listToggle" onclick="toggleList()">📋 战役清单</button>
+<div class="event-list" id="eventList">
+  <div class="list-header">
+    <span id="listTitle">全部战役 (92)</span>
+    <button class="list-close" onclick="toggleList()">✕</button>
+  </div>
+  <div id="listBody"></div>
+</div>
+<div class="counter" id="counter"></div>
+
+<div id="map"></div>
+<div id="labelsContainer" style="position:fixed;inset:0;z-index:50;pointer-events:none"></div>
+
+<div class="panel" id="panel">
+  <button class="panel-close" onclick="closePanel()">✕</button>
+  <span class="era-tag" id="eraBadge"></span>
+  <h2 id="eventTitle"></h2>
+  <p class="loc" id="locationName"></p>
+  <p class="story" id="storyText"></p>
+  <div class="meta">
+    <div>年份<span id="eventYear"></span></div>
+    <div>参战方<span id="eventParties"></span></div>
+  </div>
+  <div id="concurrentEvents"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ===== Map Init =====
+const map = L.map('map', {
+  center: [30, 105],
+  zoom: 4,
+  minZoom: 2,
+  zoomControl: false,
+  attributionControl: true
+});
+
+// ArcGIS Satellite
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+  maxZoom: 18,
+  attribution: 'Esri, Vantor, Earthstar Geographics'
+}).addTo(map);
+
+// Minimal dark labels - CartoDB dark matter as label base (only major places, no roads)
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png', {
+  maxZoom: 18,
+  attribution: 'CARTO'
+}).addTo(map);
+
+// ===== COLOR MAP =====
+const COLOR_MAP = {
+  war: '#e0553d',
+  capital: '#d4b67c',
+  turning: '#d49a0a',
+  naval: '#4ea8de',
+  rebellion: '#c77dff'
+};
+
+// ===== Marker icon =====
+function makeIcon(color) {
+  return L.divIcon({
+    className: 'marker-div-icon',
+    html: '<svg width="16" height="16"><circle cx="8" cy="8" r="5" fill="'+color+'" opacity="0.9"/><circle cx="8" cy="8" r="3" fill="'+color+'"/></svg>',
+    iconSize: [16, 16],
+    iconAnchor: [8, 8],
+    popupAnchor: [0, -8]
+  });
+}
+
+// ===== Region helper =====
+function getRegion(site) {
+  const [lat, lon] = site.coords;
+  if (lon >= 73 && lon <= 135 && lat >= 18 && lat <= 54) return 'china';
+  if (lon >= -25 && lon <= 60 && lat >= 35 && lat <= 72) return 'europe';
+  if ((lon >= 60 && lon <= 180 && lat >= 10 && lat <= 55) || (lon >= -180 && lon <= -140 && lat >= 20)) return 'asia';
+  if (lon >= -170 && lon <= -25 && lat >= 15 && lat <= 75) return 'americas';
+  if (lon >= -20 && lon <= 55 && lat >= -35 && lat <= 38) return 'africa';
+  if (lon >= 110 && lon <= 180 && lat >= -50 && lat <= -10) return 'oceania';
+  return 'asia';
+}
+
+// ===== Load data =====
+fetch('data.json').then(r => r.json()).then(sites => {
+  // Attach region
+  sites.forEach(s => { s._region = getRegion(s); });
+  window.HISTORY_SITES = sites;
+
+  // Fill era dropdown
+  const eraFilterEl = document.getElementById('eraFilter');
+  const eraPeriods = [
+    { v: 'ancient', t: '上古-古典 (前2600-500)' },
+    { v: 'medieval', t: '中世纪 (500-1500)' },
+    { v: 'early_modern', t: '近代早期 (1500-1800)' },
+    { v: 'modern', t: '近代 (1800-1945)' },
+    { v: 'contemporary', t: '现当代 (1945后)' }
+  ];
+  eraPeriods.forEach(e => {
+    const o = document.createElement('option');
+    o.value = e.v; o.textContent = e.t;
+    eraFilterEl.appendChild(o);
+  });
+
+  document.getElementById('counter').textContent = sites.length + ' 场战役';
+
+  window.allMarkers = [];
+  window.allLabels = [];
+  const labelsContainer = document.getElementById('labelsContainer');
+  
+  sites.forEach((site, i) => {
+    const color = COLOR_MAP[site.type] || COLOR_MAP.war;
+    
+    // Marker dot (no tooltip)
+    const marker = L.marker([site.coords[0], site.coords[1]], {
+      icon: makeIcon(color),
+      interactive: true
+    }).on('click', () => showDetail(site)).addTo(map);
+    marker._siteData = site;
+    window.allMarkers.push(marker);
+    
+    // Custom fixed-size label
+    const label = document.createElement('div');
+    label.className = 'custom-label';
+    label.textContent = site.event;
+    label.style.color = color;
+    label.style.fontFamily = '"Microsoft YaHei","PingFang SC","Noto Sans SC",sans-serif';
+    label.style.fontSize = '12px';
+    label.onclick = () => showDetail(site);
+    label._siteData = site;
+    labelsContainer.appendChild(label);
+    window.allLabels.push({ el: label, site: site, color: color });
+  });
+  
+  // Update label positions on map move/zoom
+  map.on('moveend zoomend', updateLabelPositions);
+  updateLabelPositions();
+
+  // Label update function
+  function updateLabelPositions() {
+    const b = map.getBounds();
+    // Group labels by lat/lon to detect overlaps
+    const posMap = {};
+    (window.allLabels || []).forEach(l => {
+      const key = l.site.coords[0].toFixed(4) + ',' + l.site.coords[1].toFixed(4);
+      if (!posMap[key]) posMap[key] = [];
+      posMap[key].push(l);
+    });
+    // Position labels with offset for overlapping ones
+    Object.values(posMap).forEach(group => {
+      const total = group.length;
+      group.forEach((l, idx) => {
+        const pos = map.latLngToContainerPoint([l.site.coords[0], l.site.coords[1]]);
+        // Stagger vertically if multiple labels at same point: each offset by 18px
+        const offsetY = total > 1 ? (idx - (total - 1) / 2) * 18 : 0;
+        l.el.style.left = pos.x + 'px';
+        l.el.style.top = (pos.y - 22 + offsetY) + 'px';
+      });
+    });
+  }
+
+  console.log('🔥 烽火卷 · Leaflet · ' + sites.length + ' 场战役');
+}).catch(err => console.error('Data load error:', err));
+
+// ===== Filter =====
+window.applyFilter = function () {
+  const era = document.getElementById('eraFilter').value;
+  const type = document.getElementById('typeFilter').value;
+  const region = document.getElementById('regionFilter').value;
+  let count = 0;
+  const filtered = [];
+  (window.allMarkers || []).forEach(m => {
+    const s = m._siteData;
+    let visible = true;
+    if (era !== 'all') {
+      const y = parseInt(s.year.replace(/[^0-9]/g, '')) || 0;
+      const eraMatch = (era === 'ancient' && y <= 500) ||
+        (era === 'medieval' && y > 500 && y <= 1500) ||
+        (era === 'early_modern' && y > 1500 && y <= 1800) ||
+        (era === 'modern' && y > 1800 && y <= 1945) ||
+        (era === 'contemporary' && y > 1945);
+      if (!eraMatch) visible = false;
+    }
+    if (type !== 'all' && s.type !== type) visible = false;
+    if (region !== 'all' && s._region !== region) visible = false;
+    if (visible) { m.addTo(map); count++; filtered.push(s); }
+    else { map.removeLayer(m); }
+  });
+  // Sync labels
+  const visIds = new Set(filtered.map(s => s.id));
+  (window.allLabels || []).forEach(l => {
+    l.el.style.display = visIds.has(l.site.id) ? '' : 'none';
+  });
+  document.getElementById('counter').textContent = '显示 ' + count + ' / ' + HISTORY_SITES.length + ' 场';
+  updateList(filtered);
+};
+
+// ===== Event List =====
+const TYPE_LABEL = { war: '战役', naval: '海战', turning: '转折', capital: '古都', rebellion: '起义' };
+function updateList(filtered) {
+  const body = document.getElementById('listBody');
+  const title = document.getElementById('listTitle');
+  const toggleBtn = document.getElementById('listToggle');
+  if (!filtered.length) {
+    body.innerHTML = '<div style="padding:12px 14px;color:#5a4433;font-size:.62rem;text-align:center">无匹配战役</div>';
+    title.textContent = '无匹配战役 (0)';
+    return;
+  }
+  title.textContent = (window._lastFilterLabel || '筛选结果') + ' (' + filtered.length + ')';
+  toggleBtn.classList.add('has-results');
+  // Sort by year
+  filtered.sort((a, b) => (parseInt(a.year.replace(/[^0-9]/g, '')) || 0) - (parseInt(b.year.replace(/[^0-9]/g, '')) || 0));
+  body.innerHTML = filtered.map(s => {
+    const color = COLOR_MAP[s.type] || COLOR_MAP.war;
+    const typeLabel = TYPE_LABEL[s.type] || s.type;
+    return '<div class="list-item" onclick="flyToSite(' + JSON.stringify(s.coords).replace(/"/g, "'") + ')" title="点击定位">' +
+      '<span class="item-dot" style="background:' + color + ';box-shadow:0 0 4px ' + color + '"></span>' +
+      s.event + ' <span style="color:#6b5540;font-size:.55rem">' + typeLabel + '</span>' +
+      '<span class="item-year">' + s.year + '</span></div>';
+  }).join('');
+}
+
+function toggleList() {
+  const el = document.getElementById('eventList');
+  const toggleBtn = document.getElementById('listToggle');
+  const showing = el.classList.toggle('show');
+  toggleBtn.textContent = showing ? '📋 隐藏清单' : '📋 战役清单';
+}
+
+function flyToSite(coords) {
+  map.flyTo([coords[0], coords[1]], 8, { duration: 1.2 });
+}
+
+// Auto-show list on filter change, build label
+const origApply = window.applyFilter;
+window.applyFilter = function() {
+  const era = document.getElementById('eraFilter');
+  const type = document.getElementById('typeFilter');
+  const region = document.getElementById('regionFilter');
+  const eraLabel = era.options[era.selectedIndex].text;
+  const typeLabel = type.options[type.selectedIndex].text;
+  const regionLabel = region.options[region.selectedIndex].text;
+  window._lastFilterLabel = eraLabel + ' · ' + typeLabel + ' · ' + regionLabel;
+  origApply();
+  // Show list if not already visible
+  const list = document.getElementById('eventList');
+  if (!list.classList.contains('show')) toggleList();
+};
+
+// ===== Show detail =====
+let currentMarker = null;
+function showDetail(site) {
+  document.getElementById('eraBadge').textContent = site.era;
+  document.getElementById('eventTitle').textContent = site.event;
+  document.getElementById('locationName').textContent = site.location;
+  document.getElementById('storyText').textContent = site.story;
+  document.getElementById('eventYear').textContent = site.year;
+  document.getElementById('eventParties').textContent = site.parties;
+  document.getElementById('panel').classList.add('active');
+
+  // Find concurrent events in other regions
+  const yrNum = parseInt(site.year.replace(/[^0-9]/g, '')) || 0;
+  if (yrNum > 0 && window.HISTORY_SITES) {
+    const thisRegion = site._region;
+    const range = yrNum < 1500 ? 100 : (yrNum < 1800 ? 50 : 20); // wider range for ancient
+    const concurrent = window.HISTORY_SITES
+      .filter(s => {
+        if (s.id === site.id) return false;
+        const sy = parseInt(s.year.replace(/[^0-9]/g, '')) || 0;
+        return sy > 0 && Math.abs(sy - yrNum) <= range && s._region !== thisRegion;
+      })
+      .sort((a, b) => Math.abs((parseInt(a.year) || 0) - yrNum) - Math.abs((parseInt(b.year) || 0) - yrNum))
+      .slice(0, 3);
+    const concurrentEl = document.getElementById('concurrentEvents');
+    if (concurrent.length > 0) {
+      const regionLabel = { china: '中国', europe: '欧洲', asia: '亚洲', americas: '美洲', africa: '非洲', oceania: '大洋洲' };
+      const items = concurrent.map(s => {
+        const reg = regionLabel[s._region] || s._region;
+        return '<div class="con-item" onclick="flyToSite(' + JSON.stringify(s.coords).replace(/"/g, "'") + ');closePanel()" title="点击定位" style="cursor:pointer;padding:3px 0;border-bottom:1px solid rgba(58,42,24,.2);font-size:.62rem;display:flex;justify-content:space-between;transition:color .15s" onmouseover="this.style.color=\'#e8d5a8\'" onmouseout="this.style.color=\'#8c7755\'"><span>📍 ' + reg + ' · ' + s.event + '</span><span style="color:#5a4433">' + s.year + '</span></div>';
+      }).join('');
+      concurrentEl.innerHTML = '<hr style="border:none;height:1px;background:linear-gradient(90deg,#3a2a18,transparent);margin:8px 0"><div style="font-size:.58rem;color:#6b5540;margin-bottom:4px">🌍 同时期世界</div>' + items;
+    } else {
+      concurrentEl.innerHTML = '';
+    }
+  }
+
+  map.flyTo([site.coords[0], site.coords[1]], 8, {duration: 1.5});
+}
+function closePanel() {
+  document.getElementById('panel').classList.remove('active');
+}
+document.addEventListener('keydown', e => {if(e.key === 'Escape') closePanel();});
+
+// ===== Tour =====
+let touring = false, ti = 0, tt = null;
+window.toggleTour = function() {
+  if (touring) {
+    touring = false; clearTimeout(tt);
+    document.getElementById('tourBtn').textContent = '▶ 时空巡游';
+    document.getElementById('tourBtn').classList.remove('on');
+    return;
+  }
+  touring = true; ti = 0;
+  document.getElementById('tourBtn').textContent = '⏸ 巡游中';
+  document.getElementById('tourBtn').classList.add('on');
+  playNext();
+};
+function playNext() {
+  if (!touring) return;
+  const srt = [...HISTORY_SITES].sort((a, b) =>
+    (parseInt(a.year.replace(/[^0-9]/g, '')) || 0) -
+    (parseInt(b.year.replace(/[^0-9]/g, '')) || 0)
+  );
+  if (ti >= srt.length) {
+    touring = false;
+    document.getElementById('tourBtn').textContent = '▶ 时空巡游';
+    document.getElementById('tourBtn').classList.remove('on');
+    return;
+  }
+  const s = srt[ti];
+  map.flyTo([s.coords[0], s.coords[1]], 7, {duration: 1.5});
+  showDetail(s);
+  ti++;
+  tt = setTimeout(() => { closePanel(); playNext(); }, 2800);
+}
+</script>
+</body>
+</html>
